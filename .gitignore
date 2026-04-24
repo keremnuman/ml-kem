@@ -1,0 +1,43 @@
+# --- Derleme Çıktıları (Binary & Objects) ---
+*.exe
+*.o
+*.out
+*.so
+*.a
+*.lib
+*.dll
+*.bin
+
+# --- VS Code Ayarları ---
+.vscode/
+# Eğer ekip arkadaşlarınla ortak debug ayarı kullanacaksan 
+# launch.json ve tasks.json'ı istisna tutabilirsin:
+# !.vscode/launch.json
+# !.vscode/tasks.json
+
+# --- İşletim Sistemi Geçici Dosyaları ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Log ve Geçici Dosyalar ---
+*.log
+*.tmp
+*.bak
+*.swp
+
+# --- Derleyici Çıktı Klasörleri ---
+build/
+dist/
+bin/
+obj/
+
+# --- Python Kullanıyorsan ---
+__pycache__/
+*.pyc
+
+# --- ML-KEM veya Test Verileri ---
+# Eğer büyük boyutlu ölçüm (test vector) dosyaların varsa:
+*.dat
+*.csv
+# (Ama küçük test dosyalarını tutmak istersen bu satırları silebilirsin)
