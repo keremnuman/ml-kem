@@ -51,4 +51,6 @@ void prf(uint8_t sigma[32], uint8_t b, int eta, uint8_t *out);
 
 void print_hex(uint8_t *in, size_t len);
 
+void print_A_matrix(const polynom_matrix *A_hat);
+
 #endif // ALGORITHMS_H

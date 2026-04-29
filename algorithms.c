@@ -88,13 +88,18 @@ void sample_ntt(const uint8_t rho[32], uint8_t i, uint8_t j, polynom *a_hat) // 
     keccak_state ctx;
     shake128_init(&ctx);
     shake128_absorb(&ctx, rho, 34);
+    printf("Keccak State after absorbing: \n");
+    printf("Position: %u\n", ctx.pos);
+    printf("State: \n");
+    print_hex((uint8_t *)ctx.s, 25 * sizeof(uint64_t));
 
     int counter = 0; // dokümanda j.
     uint8_t C[3];
     while (counter < N)
     {
         shake128_squeeze(C, 3, &ctx);
-        int16_t d1 = (int16_t)(C[0] + 256 * ((C[1] & 0x0F) << 8));
+        // int16_t d1 = (int16_t)(C[0] + 256 * ((C[1] & 0x0F) << 8)); //!!!
+        int16_t d1 = (int16_t)(C[0] + 256 * ((C[1] >> 4) && 0x0F)); //!!!
         int16_t d2 = (int16_t)((C[1] >> 4) + 16 * C[2]);
         if (d1 < Q)
         {
@@ -261,8 +266,12 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
     sha3_512(output, input, 33);
     uint8_t rho[32];
     memcpy(rho, output, 32);
+    printf("Rho: \n");
+    print_hex(rho, 32);
     uint8_t sigma[32];
     memcpy(sigma, output + 32, 32);
+    printf("Sigma: \n");
+    print_hex(sigma, 32);
     int n = 0;
     polynom_matrix A_hat;
     uint8_t prf_buffer[eta1 * 64];
@@ -273,6 +282,7 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
         for (int j = 0; j < K; j++)
         {
             sample_ntt(rho, i, j, &A_hat.matrix[i][j]);
+            print_A_matrix(&A_hat);
         }
     }
     for (int i = 0; i < K; i++)
@@ -325,4 +335,21 @@ void print_hex(uint8_t *in, size_t len)
         printf("%02x", in[i]);
     }
     printf("\n");
+}
+
+void print_A_matrix(const polynom_matrix *A_hat)
+{
+    for (int i = 0; i < K; i++)
+    {
+        for (int j = 0; j < K; j++)
+        {
+            printf("A_hat[%d][%d] = ", i, j);
+            printf("%d", A_hat->matrix[i][j].coefficients[0]);
+            for (int k = 1; k < N; k++)
+            {
+                printf(", %d", A_hat->matrix[i][j].coefficients[k]);
+            }
+            printf("\n");
+        }
+    }
 }
