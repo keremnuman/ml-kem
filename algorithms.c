@@ -16,7 +16,8 @@ void bits_to_bytes(const uint8_t *b, size_t bit_len, uint8_t *B)
     for (size_t i = 0; i < bit_len; i++)
     {
         // i. bit → B[i/8] içindeki (i%8). pozisyon
-        B[i / 8] |= (uint8_t)(b[i] << (i % 8)); // En son toplarım.
+        if (b[i] & 1)
+            B[i / 8] |= (uint8_t)(b[i] << (i % 8));
     }
 }
 
@@ -31,7 +32,7 @@ void bytes_to_bits(const uint8_t *B, size_t byte_len, uint8_t *b)
         uint8_t byte = B[i];
         for (size_t j = 0; j < 8; j++)
         {
-            b[i * 8 + j] = (byte >> j);
+            b[i * 8 + j] = (byte >> j) & 1; // 1 bit için 1 yapıyorum.
         }
     }
 }
@@ -43,11 +44,10 @@ void byte_encode(const polynom *f, int d, uint8_t *out)
 
     for (int i = 0; i < N; i++)
     {
-        int8_t c = f->coefficients[i];
+        uint16_t c = (uint16_t)(f->coefficients[i]); // coef.i 16 yaptım.
         for (int j = 0; j < d; j++)
         {
-            max_bits[i * d + j] = c % 2;
-            c = (c - (c % 2)) / 2; // >> 1 de olabilir.
+            max_bits[i * d + j] = (c >> j) & 1;
         }
     }
 
@@ -57,6 +57,7 @@ void byte_encode(const polynom *f, int d, uint8_t *out)
 // algo 6
 void byte_decode(const uint8_t *in, int d, polynom *f)
 {
+    memset(f->coefficients, 0, sizeof(f->coefficients)); // buna bakıcam
     int m;
     if (d == 12)
     {
@@ -80,36 +81,42 @@ void byte_decode(const uint8_t *in, int d, polynom *f)
 // algo 7
 void sample_ntt(const uint8_t rho[32], uint8_t i, uint8_t j, polynom *a_hat) // rho dediği p sembolü.
 {
+    // Matrisi sıfırlayacacağım önce.
+    memset(a_hat->coefficients, 0, sizeof(a_hat->coefficients));
     uint8_t temp[34];
     memcpy(temp, rho, 32);
-    temp[32] = i;
-    temp[33] = j;
+    temp[32] = j;
+    temp[33] = i;
 
     keccak_state ctx;
     shake128_init(&ctx);
-    shake128_absorb(&ctx, rho, 34);
-    printf("Keccak State after absorbing: \n");
-    printf("Position: %u\n", ctx.pos);
-    printf("State: \n");
-    print_hex((uint8_t *)ctx.s, 25 * sizeof(uint64_t));
+    shake128_absorb(&ctx, temp, 34); // rho demişiz ama temp olacak. (34)
+    shake128_finalize(&ctx);
+    // printf("Keccak State after absorbing: \n");
+    // printf("Position: %u\n", ctx.pos);
+    // printf("State: \n"); // 34'ten sonra 0 olacak. kesin değru.
+    //  print_hex((uint8_t *)ctx.s, 25 * sizeof(uint64_t));
 
     int counter = 0; // dokümanda j.
-    uint8_t C[3];
+    uint8_t C[3];    // çıkış 3 byte
     while (counter < N)
     {
         shake128_squeeze(C, 3, &ctx);
         // int16_t d1 = (int16_t)(C[0] + 256 * ((C[1] & 0x0F) << 8)); //!!!
-        int16_t d1 = (int16_t)(C[0] + 256 * ((C[1] >> 4) && 0x0F)); //!!!
-        int16_t d2 = (int16_t)((C[1] >> 4) + 16 * C[2]);
+        uint16_t d1 = (uint16_t)(C[0] | (((uint16_t)C[1] & 0x0F) << 8)); //!!!
+        uint16_t d2 = (uint16_t)((C[1] >> 4) | ((uint16_t)C[2] << 4));   // or
         if (d1 < Q)
         {
             a_hat->coefficients[counter] = d1;
+            counter++;
         }
-        if (d2 < Q && counter < 256)
+        if (d2 < Q && counter < N)
         {
             a_hat->coefficients[counter] = d2;
+            counter++;
         }
-        counter++;
+        // printf("d1: %d\n, d2: %d\n", d1, d2);
+        // printf("counter: %d\n", counter);
     }
 }
 
@@ -118,19 +125,21 @@ void sample_poly_cbd(const uint8_t *b, int eta, polynom *f)
 {
     uint8_t bits[eta1 * 64 * 8]; // size'ı max yapalım
     bytes_to_bits(b, eta * 64, bits);
-    int x = 0;
-    int y = 0;
+    // int x = 0;
+    // int y = 0; bunları içeri alıyorum.
     for (int i = 0; i < N; i++)
     {
-        for (int j = 0; j < N; j++)
+        int x = 0;
+        int y = 0;
+        for (int j = 0; j < eta; j++)
         {
             x += bits[2 * i * eta + j];
         }
-        for (int j = 0; j < N; j++)
+        for (int j = 0; j < eta; j++)
         {
             y += bits[2 * i * eta + j + eta];
         }
-        f->coefficients[i] = (uint8_t)(x - y + Q) % Q;
+        f->coefficients[i] = (uint16_t)((int)x - y + Q) % Q;
     }
 }
 
@@ -155,7 +164,8 @@ static const int16_t zetas[128] = {
 // algo 9
 void ntt(polynom *f)
 {
-    polynom f_hat;
+    // polynom f_hat;                                             // f'ten devam edicem.
+    // memset(f_hat.coefficients, 0, sizeof(f_hat.coefficients)); // bunu sıfırladığımız için sorun var galiba.
     uint32_t t;
     int i = 1;
     for (int len = 128; len >= 2; len /= 2) // bit revision kısmı zetalarda zaten hazırmış.
@@ -166,9 +176,9 @@ void ntt(polynom *f)
             for (int j = start; j < start + len; j++)
             {
                 // butterfly
-                t = ((uint32_t)zeta * f_hat.coefficients[j + len] + Q) % Q;
-                f_hat.coefficients[j + len] = (f_hat.coefficients[j] - t + Q) % Q;
-                f_hat.coefficients[j] = (f_hat.coefficients[j] + t + Q) % Q;
+                t = ((uint32_t)zeta * f->coefficients[j + len] + Q) % Q;
+                f->coefficients[j + len] = (f->coefficients[j] - t + Q) % Q;
+                f->coefficients[j] = (f->coefficients[j] + t + Q) % Q;
                 // modulo için montgomery?
             }
         }
@@ -178,7 +188,7 @@ void ntt(polynom *f)
 // algo 10
 void ntt_inverse(polynom *f_hat)
 {
-    polynom f;
+    // polynom f; // yine aynı mevzu
     uint32_t t;
     int i = 127;
     for (int len = 2; len <= 128; len *= 2)
@@ -188,15 +198,15 @@ void ntt_inverse(polynom *f_hat)
             uint32_t zeta = zetas[i--];
             for (int j = start; j < start + len; j++)
             {
-                t = f.coefficients[j];
-                f.coefficients[j] = (t + f.coefficients[j + len] + Q) % Q;
-                f.coefficients[j + len] = ((uint32_t)zeta * (f.coefficients[j + len] - t) + Q) % Q;
+                t = f_hat->coefficients[j];
+                f_hat->coefficients[j] = (t + f_hat->coefficients[j + len] + Q) % Q;
+                f_hat->coefficients[j + len] = ((uint32_t)zeta * (f_hat->coefficients[j + len] - t) + Q) % Q;
             }
         }
     }
     for (int i = 0; i < N; i++)
     {
-        f.coefficients[i] = (f.coefficients[i] * 3303 + Q) % Q;
+        f_hat->coefficients[i] = (f_hat->coefficients[i] * 3303 + Q) % Q;
     }
 }
 
@@ -221,19 +231,16 @@ static const int16_t gammas[128] = {
 // algo 11
 void multiply_ntts(polynom *f_hat, polynom *g_hat, polynom *h_hat)
 {
-    for (int i = 0; i < N; i++)
+    for (int i = 0; i < 128; i++)
     {
-        for (int i = 0; i < 128; i++)
-        {
-            int16_t a0 = f_hat->coefficients[2 * i];
-            int16_t a1 = f_hat->coefficients[2 * i + 1];
-            int16_t b0 = g_hat->coefficients[2 * i];
-            int16_t b1 = g_hat->coefficients[2 * i + 1];
-            int gamma = gammas[i];
-            int16_t *c0 = &h_hat->coefficients[2 * i];
-            int16_t *c1 = &h_hat->coefficients[2 * i + 1];
-            base_case_multiply(a0, a1, b0, b1, c0, c1, gamma);
-        }
+        int16_t a0 = f_hat->coefficients[2 * i];
+        int16_t a1 = f_hat->coefficients[2 * i + 1];
+        int16_t b0 = g_hat->coefficients[2 * i];
+        int16_t b1 = g_hat->coefficients[2 * i + 1];
+        int gamma = gammas[i];
+        int16_t *c0 = &h_hat->coefficients[2 * i];
+        int16_t *c1 = &h_hat->coefficients[2 * i + 1];
+        base_case_multiply(a0, a1, b0, b1, c0, c1, gamma);
     }
 }
 
@@ -242,8 +249,15 @@ void base_case_multiply(int16_t a0, int16_t a1, int16_t b0, int16_t b1, int16_t 
 {
     // P1 = a0 + a1*x, P2 = b0 + b1*x
     // X^2 = gamma (sabit terim) olsun
-    *c0 = (a0 * b0 + a1 * b1 * gamma + Q) % Q; // çarpmaları ayrı ayrı 32 bitte yazmak gerekebilir bakıcaz.
-    *c1 = (a0 * b1 + a1 * b0 + Q) % Q;
+    uint32_t temp1 = ((uint32_t)a0 * b0) % Q;
+    uint32_t temp2 = ((uint32_t)a1 * b1) % Q;
+    uint32_t temp3 = ((uint32_t)a0 * b1) % Q;
+    uint32_t temp4 = ((uint32_t)a1 * b0) % Q;
+    *c0 = (temp1 + ((uint64_t)temp2 * gamma) % Q) % Q;
+    *c1 = (temp3 + temp4) % Q;
+    // *c0 = (a0 * b0 + a1 * b1 * gamma + Q) % Q; // çarpmaları ayrı ayrı 32 bitte yazmak gerekebilir bakıcaz.
+    // bu gerekliymiş bu arada. düzelttim.
+    // *c1 = (a0 * b1 + a1 * b0 + Q) % Q;
     // bu ikisi h'nin katsayıları olacak (algo 11).
 }
 
@@ -263,7 +277,7 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
     memcpy(input, d, 32);
     input[32] = (uint8_t)K;
     uint8_t output[64];
-    sha3_512(output, input, 33);
+    sha3_512(output, input, 33); // bu kesin doğru.
     uint8_t rho[32];
     memcpy(rho, output, 32);
     printf("Rho: \n");
@@ -274,6 +288,7 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
     print_hex(sigma, 32);
     int n = 0;
     polynom_matrix A_hat;
+    memset(&A_hat, 0, sizeof(A_hat)); // algo 7'de de var ama orada sadece tek polinomdu.
     uint8_t prf_buffer[eta1 * 64];
     polynom_vector s_hat, e_hat, t_hat;
     polynom temp;
@@ -282,9 +297,10 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
         for (int j = 0; j < K; j++)
         {
             sample_ntt(rho, i, j, &A_hat.matrix[i][j]);
-            print_A_matrix(&A_hat);
         }
     }
+    print_A_matrix(&A_hat);
+
     for (int i = 0; i < K; i++)
     {
         prf(sigma, n, eta1, prf_buffer);
@@ -310,8 +326,8 @@ void keygen(uint8_t d[32], uint8_t encryption_key[K * 384 + 32], uint8_t decrypt
             multiply_ntts(&A_hat.matrix[i][j], &s_hat.vector[j], &temp);
             for (int k = 0; k < N; k++)
             {
-                t_hat.vector[i].coefficients[k] += temp.coefficients[k];
-                t_hat.vector[i].coefficients[k] = (t_hat.vector[i].coefficients[k] + Q);
+                int32_t sum = (int32_t)t_hat.vector[i].coefficients[k] + (int32_t)temp.coefficients[k];
+                t_hat.vector[i].coefficients[k] = (sum + Q) % Q;
             }
         }
     }
@@ -344,10 +360,10 @@ void print_A_matrix(const polynom_matrix *A_hat)
         for (int j = 0; j < K; j++)
         {
             printf("A_hat[%d][%d] = ", i, j);
-            printf("%d", A_hat->matrix[i][j].coefficients[0]);
-            for (int k = 1; k < N; k++)
+            // printf("%d", A_hat->matrix[i][j].coefficients[0]);
+            for (int k = 0; k < N; k++)
             {
-                printf(", %d", A_hat->matrix[i][j].coefficients[k]);
+                printf(", %d", (uint16_t)A_hat->matrix[i][j].coefficients[k]);
             }
             printf("\n");
         }
