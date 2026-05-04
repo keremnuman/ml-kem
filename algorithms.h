@@ -53,4 +53,10 @@ void print_hex(uint8_t *in, size_t len);
 
 void print_A_matrix(const polynom_matrix *A_hat);
 
+void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32]); // m: message, r: randomness
+
+void compress(void);
+
+void decompress(void);
+
 #endif // ALGORITHMS_H
