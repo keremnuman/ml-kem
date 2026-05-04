@@ -22,7 +22,3 @@ __pycache__/
 *.pyc
 *.dat
 *.csv
-test.c
-test_full.c
-image.png
-montgomery.c
