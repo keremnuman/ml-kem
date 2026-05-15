@@ -369,3 +369,24 @@ void print_A_matrix(const polynom_matrix *A_hat)
         }
     }
 }
+
+// algo 14
+void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32])
+{
+}
+
+void compress(int16_t x, int d, uint16_t *compressed)
+{
+    uint32_t power_of_two = 1 << d;
+    uint32_t x_positive = (uint32_t)(x % Q + Q) % Q;
+    uint32_t result = (x_positive * power_of_two + (Q / 2)) / Q;
+    *compressed = (uint16_t)(result & (power_of_two - 1));
+}
+
+void decompress(uint16_t compressed, int d, int16_t *decompressed)
+{
+    uint32_t power_of_two = 1 << d;
+    uint32_t result = (uint32_t)compressed * Q;
+    result = result + (power_of_two / 2) / power_of_two;
+    *decompressed = (int16_t)(result);
+}

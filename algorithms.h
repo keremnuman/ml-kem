@@ -7,6 +7,8 @@
 #define Q 3329
 #define eta1 3
 #define eta2 2
+#define du 10
+#define dv 4
 // #define d 12
 
 // 256 için 8 bit aldım. ??
@@ -55,8 +57,8 @@ void print_A_matrix(const polynom_matrix *A_hat);
 
 void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32]); // m: message, r: randomness
 
-void compress(void);
+void compress(int16_t x, int d, uint16_t *compressed);
 
-void decompress(void);
+void decompress(uint16_t compressed, int d, int16_t *decompressed);
 
 #endif // ALGORITHMS_H
