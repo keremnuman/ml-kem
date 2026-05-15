@@ -30,5 +30,10 @@ int main(int argc, char *argv[])
     print_hex(encryption_key, K * 384 + 32);
     printf("Private Key: \n");
     print_hex(decryption_key, K * 384);
+
+    uint8_t ciphertext[32 * (du * K + dv)];
+    encrypt(encryption_key, m, r, ciphertext);
+    printf("Ciphertext: \n");
+    print_hex(ciphertext, 32 * (du * K + dv));
     return 0;
 }
