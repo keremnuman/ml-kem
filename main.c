@@ -24,17 +24,15 @@ int main(int argc, char *argv[])
         0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
         0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f};
 
-    // printf("d: \n");
-    // print_hex(d, 32);
+    printf("d: \n");
+    print_hex(d, 32);
     keygen(d, encryption_key, decryption_key);
-    // printf("Public Key: \n");
-    // print_hex(encryption_key, K * 384 + 32);
-    // printf("Private Key: \n");
-    // print_hex(decryption_key, K * 384);
+    printf("Public Key: \n");
+    print_hex(encryption_key, K * 384 + 32);
+    printf("Private Key: \n");
+    print_hex(decryption_key, K * 384);
 
     uint8_t ciphertext[32 * (du * K + dv)];
     encrypt(encryption_key, m, r, ciphertext);
-    printf("Ciphertext: \n");
-    print_hex(ciphertext, 32 * (du * K + dv));
     return 0;
 }

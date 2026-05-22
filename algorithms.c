@@ -57,7 +57,6 @@ void byte_encode(const polynom *f, int d, uint8_t *out)
 // algo 6
 void byte_decode(const uint8_t *in, int d, polynom *f)
 {
-    printf("Byte Decode\n");
     memset(f->coefficients, 0, 256 * sizeof(int16_t)); // buna bakıcam
     int m;
     if (d == 12)
@@ -69,7 +68,6 @@ void byte_decode(const uint8_t *in, int d, polynom *f)
 
     uint8_t bits[N * 12]; // d=12 max
     bytes_to_bits(in, (N * d) / 8, bits);
-    printf("bytes_to_bits End\n");
     for (int i = 0; i < N; i++)
     {
         int32_t sum = 0;
@@ -79,7 +77,6 @@ void byte_decode(const uint8_t *in, int d, polynom *f)
         }
         f->coefficients[i] = (int16_t)(sum % Q);
     }
-    printf("Byte Decode End\n");
 }
 
 // algo 7
@@ -377,16 +374,13 @@ void print_A_matrix(const polynom_matrix *A_hat)
 // algo 14
 void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32], uint8_t ciphertext[32 * (du * K + dv)])
 {
-    printf("Debug 1\n");
     int n = 0;
     polynom_vector t_hat;
     memset(&t_hat, 0, sizeof(polynom_vector));
-    printf("Debug 2\n");
     for (int i = 0; i < K; i++)
     {
         byte_decode(&encryption_key[i * 384], 12, &t_hat.vector[i]);
     }
-    printf("Debug 2\n");
     uint8_t *rho = &encryption_key[K * 384]; // seed for matrix (32B).
     polynom_matrix A_hat;
     for (int i = 0; i < K; i++)
@@ -396,7 +390,6 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
             sample_ntt(rho, j, i, &A_hat.matrix[i][j]);
         }
     }
-    printf("Debug 3\n");
     uint8_t prf_buffer[eta1 * 64];
     polynom_vector y, e1, u;
     for (int i = 0; i < K; i++)
@@ -405,24 +398,20 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
         sample_poly_cbd(prf_buffer, eta1, &y.vector[i]);
         n++;
     }
-    printf("Debug 4\n");
     for (int i = 0; i < K; i++)
     {
         prf(r, n, eta2, prf_buffer);
         sample_poly_cbd(prf_buffer, eta2, &e1.vector[i]);
         n++;
     }
-    printf("Debug 5\n");
     polynom e2;
     prf(r, n, eta2, prf_buffer); // n++?
     n++;
     sample_poly_cbd(prf_buffer, eta2, &e2);
-    printf("Debug 6\n");
     for (int i = 0; i < K; i++)
     {
         ntt(&y.vector[i]);
     }
-    printf("Debug 7\n");
     polynom temp, v;
     for (int i = 0; i < K; i++)
     {
@@ -442,11 +431,9 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
             u.vector[i].coefficients[j] = (int16_t)((sum % Q + Q) % Q);
         }
     }
-    printf("Debug 8\n");
 
     polynom mü;
     byte_decode(m, 1, &mü);
-    printf("Debug 9\n");
     for (int i = 0; i < N; i++)
     {
         uint16_t compressed_val = (uint16_t)mü.coefficients[i]; // 0 - 1
@@ -454,7 +441,6 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
         decompress(compressed_val, 1, &decompressed_val);
         mü.coefficients[i] = decompressed_val;
     }
-    printf("Debug 10\n");
     memset(&v, 0, sizeof(polynom));
     for (int i = 0; i < K; i++)
     {
@@ -464,16 +450,12 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
             v.coefficients[k] = (v.coefficients[k] + temp.coefficients[k]) % Q;
         }
     }
-    printf("Debug 11\n");
     ntt_inverse(&v);
-    printf("Debug 12\n");
     for (int i = 0; i < N; i++) // K?
     {
         int32_t sum = (int32_t)v.coefficients[i] + e2.coefficients[i] + mü.coefficients[i];
         v.coefficients[i] = (int16_t)((sum % Q + Q) % Q);
     }
-    printf("Debug 13\n");
-
     int u_bytes = 256 * du / 8; // 320B
     for (int i = 0; i < K; i++) // 320x2 = 640B, 10bit
     {
@@ -486,7 +468,6 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
         }
         byte_encode(&u_compressed, du, &ciphertext[i * u_bytes]);
     }
-    printf("Debug 14\n");
     polynom v_compressed;
     for (int j = 0; j < N; j++)
     {
@@ -494,17 +475,15 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
         compress(v.coefficients[j], dv, &temp);
         v_compressed.coefficients[j] = (uint16_t)temp;
     }
-    printf("Debug 15\n");
     byte_encode(&v_compressed, dv, &ciphertext[K * u_bytes]); // 128B, 4bit
-    printf("Debug 16\n");
-
     printf("Ciphertext: \n");
-    printf("c1-u[0]");
+    printf("c1-u[0]\n");
     print_hex(&ciphertext[0], u_bytes); // 320
-    printf("c1-u[1]");
+    printf("c1-u[1]\n");
     print_hex(&ciphertext[320], u_bytes); // 320
-    printf("c2-v");
-    print_hex(&ciphertext[640], 128);          // 128
+    printf("c2-v\n");
+    print_hex(&ciphertext[640], 128); // 128
+    printf("Full Ciphertext: \n");
     print_hex(ciphertext, 32 * (du * K + dv)); // 768
     fflush(stdout);
 }
