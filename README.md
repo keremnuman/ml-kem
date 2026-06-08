@@ -7,10 +7,10 @@ Minimal implementation of a **post-quantum key encapsulation mechanism (KEM)** i
 * SHA3 and SHAKE functions based on FIPS 202
 
 ## Project Structure
-algortihms.h
-algortihms.c
-fips202.h
-fips202.c
+algortihms.h,
+algortihms.c,
+fips202.h,
+fips202.c,
 main.c
 
 ## Build
