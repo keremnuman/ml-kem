@@ -44,7 +44,7 @@ void byte_encode(const polynom *f, int d, uint8_t *out)
 
     for (int i = 0; i < N; i++)
     {
-        uint16_t c = (uint16_t)(f->coefficients[i]); // coef.i 16 yaptım.
+        uint16_t c = (uint16_t)(f->coefficients[i]);
         for (int j = 0; j < d; j++)
         {
             max_bits[i * d + j] = (c >> j) & 1;
@@ -57,7 +57,7 @@ void byte_encode(const polynom *f, int d, uint8_t *out)
 // algo 6
 void byte_decode(const uint8_t *in, int d, polynom *f)
 {
-    memset(f->coefficients, 0, 256 * sizeof(int16_t)); // buna bakıcam
+    memset(f->coefficients, 0, 256 * sizeof(int16_t));
     int m;
     if (d == 12)
     {
@@ -82,7 +82,6 @@ void byte_decode(const uint8_t *in, int d, polynom *f)
 // algo 7
 void sample_ntt(const uint8_t rho[32], uint8_t i, uint8_t j, polynom *a_hat) // rho dediği p sembolü.
 {
-    // Matrisi sıfırlayacacağım önce.
     memset(a_hat->coefficients, 0, sizeof(a_hat->coefficients));
     uint8_t temp[34];
     memcpy(temp, rho, 32);
@@ -149,7 +148,8 @@ void ntt(polynom *f)
 {
     // polynom f_hat;                                             // f'ten devam edicem.
     // memset(f_hat.coefficients, 0, sizeof(f_hat.coefficients)); // bunu sıfırladığımız için sorun var galiba.
-    uint32_t t;
+    // uint32_t t;
+    int32_t t;
     int i = 1;
     for (int len = 128; len >= 2; len /= 2) // bit revision kısmı zetalarda zaten hazırmış.
     {
@@ -159,7 +159,8 @@ void ntt(polynom *f)
             for (int j = start; j < start + len; j++)
             {
                 // butterfly
-                t = ((uint32_t)zeta * f->coefficients[j + len] + Q) % Q;
+                t = (int32_t)((int64_t)zeta * f->coefficients[j + len] % Q);
+                t = (t % Q + Q) % Q;
                 f->coefficients[j + len] = (f->coefficients[j] - t + Q) % Q;
                 f->coefficients[j] = (f->coefficients[j] + t + Q) % Q;
                 // modulo için montgomery?
@@ -172,7 +173,8 @@ void ntt(polynom *f)
 void ntt_inverse(polynom *f_hat)
 {
     // polynom f; // yine aynı mevzu
-    uint32_t t;
+    // uint32_t t;
+    int32_t t;
     int i = 127;
     for (int len = 2; len <= 128; len *= 2)
     {
@@ -183,7 +185,8 @@ void ntt_inverse(polynom *f_hat)
             {
                 t = f_hat->coefficients[j];
                 f_hat->coefficients[j] = (t + f_hat->coefficients[j + len] + Q) % Q;
-                f_hat->coefficients[j + len] = ((uint32_t)zeta * (f_hat->coefficients[j + len] - t) + Q) % Q;
+                int32_t diff = (int32_t)f_hat->coefficients[j + len] - t;
+                f_hat->coefficients[j + len] = (int16_t)(((int64_t)zeta * diff % Q + Q) % Q);
             }
         }
     }
@@ -214,12 +217,16 @@ void base_case_multiply(int16_t a0, int16_t a1, int16_t b0, int16_t b1, int16_t 
 {
     // P1 = a0 + a1*x, P2 = b0 + b1*x
     // X^2 = gamma (sabit terim) olsun
-    uint32_t temp1 = ((uint32_t)a0 * b0) % Q;
-    uint32_t temp2 = ((uint32_t)a1 * b1) % Q;
-    uint32_t temp3 = ((uint32_t)a0 * b1) % Q;
-    uint32_t temp4 = ((uint32_t)a1 * b0) % Q;
-    *c0 = (temp1 + ((uint64_t)temp2 * gamma) % Q) % Q;
-    *c1 = (temp3 + temp4) % Q;
+    int32_t temp1 = ((int32_t)a0 * b0) % Q;
+    int32_t temp2 = ((int32_t)a1 * b1) % Q;
+    int32_t temp3 = ((int32_t)a0 * b1) % Q;
+    int32_t temp4 = ((int32_t)a1 * b0) % Q;
+
+    int32_t c0_val = temp1 + temp2 * gamma;
+    *c0 = (int16_t)((c0_val % Q + Q) % Q);
+
+    int32_t c1_val = temp3 + temp4;
+    *c1 = (int16_t)((c1_val % Q + Q) % Q);
     // *c0 = (a0 * b0 + a1 * b1 * gamma + Q) % Q; // çarpmaları ayrı ayrı 32 bitte yazmak gerekebilir bakıcaz.
     // bu gerekliymiş bu arada. düzelttim.
     // *c1 = (a0 * b1 + a1 * b0 + Q) % Q;
@@ -325,10 +332,11 @@ void print_A_matrix(const polynom_matrix *A_hat)
         for (int j = 0; j < K; j++)
         {
             printf("A_hat[%d][%d] = ", i, j);
-            // printf("%d", A_hat->matrix[i][j].coefficients[0]);
             for (int k = 0; k < N; k++)
             {
-                printf(", %d", (uint16_t)A_hat->matrix[i][j].coefficients[k]);
+                printf("%d", (uint16_t)A_hat->matrix[i][j].coefficients[k]);
+                if (k < N - 1)
+                    printf(", ");
             }
             printf("\n");
         }
@@ -385,7 +393,8 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
             multiply_ntts(&A_hat.matrix[i][j], &y.vector[j], &temp);
             for (int k = 0; k < N; k++)
             {
-                u.vector[i].coefficients[k] = (u.vector[i].coefficients[k] + temp.coefficients[k]) % Q;
+                int32_t acc = (int32_t)u.vector[i].coefficients[k] + temp.coefficients[k];
+                u.vector[i].coefficients[k] = (int16_t)((acc % Q + Q) % Q);
             }
         }
         ntt_inverse(&u.vector[i]);
@@ -397,13 +406,15 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
     }
 
     polynom mü;
-    byte_decode(m, 1, &mü);
-    for (int i = 0; i < N; i++)
+    memset(&mü, 0, sizeof(polynom));
+    // byte_decode(m, 1, &mü);
+    for (int i = 0; i < 32; i++)
     {
-        uint16_t compressed_val = (uint16_t)mü.coefficients[i]; // 0 - 1
-        int16_t decompressed_val;
-        decompress(compressed_val, 1, &decompressed_val);
-        mü.coefficients[i] = decompressed_val;
+        for (int j = 0; j < 8; j++)
+        {
+            uint8_t bit = (m[i] >> j) & 1;
+            mü.coefficients[i * 8 + j] = bit ? 1665 : 0; // Decompress_1(bit)
+        }
     }
     memset(&v, 0, sizeof(polynom));
     for (int i = 0; i < K; i++)
@@ -411,7 +422,8 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
         multiply_ntts(&t_hat.vector[i], &y.vector[i], &temp);
         for (int k = 0; k < N; k++)
         {
-            v.coefficients[k] = (v.coefficients[k] + temp.coefficients[k]) % Q;
+            int32_t acc = (int32_t)v.coefficients[k] + temp.coefficients[k];
+            v.coefficients[k] = (int16_t)((acc % Q + Q) % Q);
         }
     }
     ntt_inverse(&v);
@@ -424,20 +436,23 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
     for (int i = 0; i < K; i++) // 320x2 = 640B, 10bit
     {
         polynom u_compressed;
+        memset(&u_compressed, 0, sizeof(polynom));
         for (int j = 0; j < N; j++)
         {
-            uint16_t temp;
-            compress(u.vector[i].coefficients[j], du, &temp);
-            u_compressed.coefficients[j] = (uint16_t)temp;
+            uint16_t temp_val;
+            compress(u.vector[i].coefficients[j], du, &temp_val);
+            u_compressed.coefficients[j] = (int16_t)temp_val;
         }
+        // printf("Encrypt u[0][0]: %d\n", u.vector[0].coefficients[0]);
         byte_encode(&u_compressed, du, &ciphertext[i * u_bytes]);
     }
     polynom v_compressed;
+    memset(&v_compressed, 0, sizeof(polynom));
     for (int j = 0; j < N; j++)
     {
-        uint16_t temp;
-        compress(v.coefficients[j], dv, &temp);
-        v_compressed.coefficients[j] = (uint16_t)temp;
+        uint16_t temp_val;
+        compress(v.coefficients[j], dv, &temp_val);
+        v_compressed.coefficients[j] = (int16_t)temp_val;
     }
     byte_encode(&v_compressed, dv, &ciphertext[K * u_bytes]); // 128B, 4bit
     printf("Ciphertext: \n");
@@ -466,4 +481,209 @@ void decompress(uint16_t compressed, int d, int16_t *decompressed)
     uint32_t result = (uint32_t)compressed * Q;
     result = (result + (power_of_two / 2)) / power_of_two;
     *decompressed = (int16_t)(result);
+}
+
+// algo 15
+void decrypt(uint8_t decryption_key[K * 384], uint8_t ciphertext[32 * (du * K + dv)], uint8_t m[32])
+{
+    uint8_t c1[640];
+    uint8_t c2[128];
+    memcpy(c1, &ciphertext[0], 640);
+    memcpy(c2, &ciphertext[640], 128);
+    polynom_vector u_hat, s_hat;
+    polynom v_hat;
+    memset(&u_hat, 0, sizeof(polynom_vector));
+    memset(&s_hat, 0, sizeof(polynom_vector));
+    memset(&v_hat, 0, sizeof(polynom));
+    int u_bytes = 256 * du / 8;
+    polynom u_compressed;
+    memset(&u_compressed, 0, sizeof(polynom));
+    for (int i = 0; i < K; i++)
+    {
+        byte_decode(&c1[i * u_bytes], du, &u_compressed);
+        for (int j = 0; j < N; j++)
+        {
+            int16_t decompressed_val;
+            decompress((uint16_t)u_compressed.coefficients[j], du, &decompressed_val);
+            u_hat.vector[i].coefficients[j] = decompressed_val;
+            // printf("u_hat[%d][%d]: %d\n", i, j, u_hat.vector[i].coefficients[j]);
+        }
+    }
+    polynom v_compressed;
+    memset(&v_compressed, 0, sizeof(polynom));
+    byte_decode(&ciphertext[K * u_bytes], dv, &v_compressed);
+    for (int i = 0; i < N; i++)
+    {
+        int16_t decompressed_val;
+        decompress((uint16_t)v_compressed.coefficients[i], dv, &decompressed_val);
+        v_hat.coefficients[i] = decompressed_val;
+    }
+    for (int i = 0; i < K; i++)
+    {
+        byte_decode(&decryption_key[i * 384], 12, &s_hat.vector[i]);
+    }
+    polynom temp, s_hat_temp;
+    memset(&temp, 0, sizeof(polynom));
+    memset(&s_hat_temp, 0, sizeof(polynom));
+    for (int i = 0; i < K; i++)
+    {
+        ntt(&u_hat.vector[i]);
+        multiply_ntts(&s_hat.vector[i], &u_hat.vector[i], &temp); // NTT mult. initializes every round.
+        for (int j = 0; j < N; j++)
+        {
+            s_hat_temp.coefficients[j] = (int16_t)(((s_hat_temp.coefficients[j] + temp.coefficients[j]) % Q + Q) % Q);
+        }
+    }
+    ntt_inverse(&s_hat_temp);
+    polynom w, w_bit;
+    memset(&w, 0, sizeof(polynom));
+    memset(&w_bit, 0, sizeof(polynom));
+    for (int i = 0; i < N; i++)
+    {
+        int32_t sum = (int32_t)v_hat.coefficients[i] - (int32_t)s_hat_temp.coefficients[i];
+        w.coefficients[i] = (int16_t)((sum % Q + Q) % Q);
+    }
+    for (int i = 0; i < N; i++)
+    {
+        uint16_t bit_val;
+        compress(w.coefficients[i], 1, &bit_val);
+        w_bit.coefficients[i] = (int16_t)bit_val;
+    }
+    byte_encode(&w_bit, 1, m);
+    printf("m:\n");
+    print_hex(m, 32);
+}
+
+// algo 16
+void keygen_internal(uint8_t d[32], uint8_t z[32], uint8_t encapsulation_key[K * 384 + 32], uint8_t decapsulation_key[K * 768 + 96])
+{
+    uint8_t temp_dk[K * 384];
+    uint8_t hash[32];
+    memset(temp_dk, 0, K * 384);
+    keygen(d, encapsulation_key, temp_dk);
+    memcpy(decapsulation_key, temp_dk, K * 384);
+    memcpy(&decapsulation_key[K * 384], encapsulation_key, K * 384 + 32);
+    sha3_256(hash, encapsulation_key, K * 384 + 32); //
+    memcpy(&decapsulation_key[2 * 384 * K + 32], hash, 32);
+    memcpy(&decapsulation_key[2 * 384 * K + 64], z, 32);
+    printf("Decapsulation Key:\n");
+    print_hex(decapsulation_key, 2 * 384 * K + 96);
+    printf("Encapsulation Key:\n");
+    print_hex(encapsulation_key, 384 * K + 32);
+}
+
+// algo 17
+void encaps_internal(uint8_t encapsulation_key[K * 384 + 32], uint8_t randomness_m[32], uint8_t shared_key[32], uint8_t ciphertext[(du * K + dv) * 32])
+{
+    uint8_t temp[64];
+    memcpy(temp, randomness_m, 32);
+    uint8_t hash[32];
+    sha3_256(hash, encapsulation_key, K * 384 + 32);
+    memcpy(&temp[32], hash, 32);
+    uint8_t G_temp[64];
+    sha3_512(G_temp, temp, 64);
+    memcpy(shared_key, G_temp, 32);
+    printf("Shared Key: \n");
+    print_hex(shared_key, 32);
+    uint8_t randomness_r[32];
+    memcpy(randomness_r, &G_temp[32], 32);
+    encrypt(encapsulation_key, randomness_m, randomness_r, ciphertext);
+    printf("Ciphertext: \n");
+    print_hex(ciphertext, 32 * (du * K + dv));
+}
+
+// algo 18
+void decaps_internal(uint8_t decapsulation_key[K * 768 + 96], uint8_t ciphertext[32 * (du * K + dv)], uint8_t shared_key[32])
+{
+    int c_len = 32 * (du * K + dv); // 768
+    uint8_t decryption_key[K * 384];
+    memcpy(decryption_key, decapsulation_key, K * 384);
+    uint8_t encryption_key[K * 384 + 32];
+    memcpy(encryption_key, &decapsulation_key[K * 384], K * 384 + 32);
+    uint8_t hash[32];
+    memcpy(hash, &decapsulation_key[2 * 384 * K + 32], 32);
+    uint8_t z[32];
+    memcpy(z, &decapsulation_key[2 * 384 * K + 64], 32);
+    uint8_t m_prime[32];
+    decrypt(decryption_key, ciphertext, m_prime);
+    printf("m_prime:\n");
+    print_hex(m_prime, 32);
+    uint8_t G_in[64];
+    memcpy(G_in, m_prime, 32);
+    memcpy(&G_in[32], hash, 32);
+    uint8_t hash_result[64];
+    sha3_512(hash_result, G_in, 64);
+    printf("hash_result:\n");
+    print_hex(hash_result, 64);
+    uint8_t K_prime[32];
+    uint8_t r_prime[32];
+    memcpy(K_prime, &hash_result[0], 32);
+    memcpy(r_prime, &hash_result[32], 32);
+    printf("K_prime:\n");
+    print_hex(K_prime, 32);
+    printf("r_prime:\n");
+    print_hex(r_prime, 32);
+    uint8_t J_in[800];
+    memcpy(J_in, z, 32);
+    memcpy(J_in + 32, ciphertext, c_len);
+    uint8_t K_bar[32];
+    shake256(K_bar, 32, J_in, 800);
+    printf("K_bar:\n");
+    print_hex(K_bar, 32);
+    uint8_t c_prime[768];
+    memset(c_prime, 0, 768);
+    encrypt(encryption_key, m_prime, r_prime, c_prime);
+    printf("c_prime:\n");
+    print_hex(c_prime, 768);
+    if (memcmp(ciphertext, c_prime, 768) != 0)
+    {
+        printf("c_prime is not equal to ciphertext\n");
+        printf(strerror(errno));
+        printf("Implicit rejection\n");
+        memcpy(shared_key, K_bar, 32);
+    }
+    else
+        memcpy(shared_key, K_prime, 32);
+    printf("Shared Key: \n");
+    print_hex(shared_key, 32);
+}
+
+// algo 19
+void mlkem_keygen(uint8_t encapsulation_key[384 * K + 32], uint8_t decapsulation_key[768 * K + 96], uint8_t d[32], uint8_t z[32])
+{
+    if (d == NULL || z == NULL)
+    {
+        printf("d or z is NULL\n");
+        printf(strerror(errno));
+        return;
+    }
+    keygen_internal(d, z, encapsulation_key, decapsulation_key);
+}
+
+// algo 20
+void encaps(uint8_t encapsulation_key[384 * K + 32], uint8_t shared_key[32], uint8_t ciphertext[(du * K + dv) * 32], uint8_t m[32])
+{
+    if (m == NULL)
+    {
+        printf("m is NULL\n");
+        printf(strerror(errno));
+        return;
+    }
+    encaps_internal(encapsulation_key, m, shared_key, ciphertext);
+}
+
+// algo 21
+void decaps(uint8_t decapsulation_key[768 * K + 96], uint8_t ciphertext[32 * (du * K + dv)], uint8_t shared_key[32])
+{
+    decaps_internal(decapsulation_key, ciphertext, shared_key);
+    printf("Shared Key: \n");
+    print_hex(shared_key, 32);
+}
+
+void hex_to_bytes(char *hex_str, uint8_t *byte_array)
+{
+    for (size_t i = 0; i < strlen(hex_str); i += 2)
+    {
+        sscanf(&hex_str[i], "%2hhx", &byte_array[i / 2]);
+    }
 }

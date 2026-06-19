@@ -49,17 +49,17 @@ static const int16_t gammas[128] = {
 
 typedef struct
 {
-    int16_t coefficients[N];
+    int16_t coefficients[N]; // m,v,w,e2 and hats.
 } polynom;
 
 typedef struct
 {
-    polynom vector[K];
+    polynom vector[K]; // s,e,t,u,r,e1 and hats.
 } polynom_vector;
 
 typedef struct
 {
-    polynom matrix[K][K];
+    polynom matrix[K][K]; // A, A^T, and hats.
 } polynom_matrix;
 
 void bits_to_bytes(const uint8_t *b, size_t bit_len, uint8_t *B);
@@ -95,5 +95,21 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
 void compress(int16_t x, int d, uint16_t *compressed);
 
 void decompress(uint16_t compressed, int d, int16_t *decompressed);
+
+void decrypt(uint8_t decryption_key[K * 384], uint8_t ciphertext[32 * (du * K + dv)], uint8_t m[32]);
+
+void keygen_internal(uint8_t d[32], uint8_t z[32], uint8_t encryption_key[K * 384 + 32], uint8_t decryption_key[K * 768 + 96]);
+
+void encaps_internal(uint8_t encapsulation_key[K * 384 + 32], uint8_t randomness[32], uint8_t shared_key[32], uint8_t ciphertext[(du * K + dv) * 32]);
+
+void decaps_internal(uint8_t decapsulation_key[K * 768 + 96], uint8_t ciphertext[32 * (du * K + dv)], uint8_t shared_key[32]);
+
+void mlkem_keygen(uint8_t encapsulation_key[384 * K + 32], uint8_t decapsulation_key[768 * K + 96], uint8_t d[32], uint8_t z[32]);
+
+void encaps(uint8_t encapsulation_key[384 * K + 32], uint8_t shared_key[32], uint8_t ciphertext[(du * K + dv) * 32], uint8_t m[32]);
+
+void decaps(uint8_t decapsulation_key[768 * K + 96], uint8_t ciphertext[32 * (du * K + dv)], uint8_t shared_key[32]);
+
+void hex_to_bytes(char *hex_str, uint8_t *byte_array);
 
 #endif // ALGORITHMS_H
