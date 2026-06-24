@@ -359,7 +359,7 @@ void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32],
     {
         for (int j = 0; j < K; j++)
         {
-            sample_ntt(rho, j, i, &A_hat.matrix[i][j]);
+            sample_ntt(rho, j, i, &A_hat.matrix[i][j]); // i-j
         }
     }
     uint8_t prf_buffer[eta1 * 64];

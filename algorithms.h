@@ -90,7 +90,7 @@ void print_hex(uint8_t *in, size_t len);
 
 void print_A_matrix(const polynom_matrix *A_hat);
 
-void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32], uint8_t ciphertext[32 * (du * K + dv)]); // m: message, r: randomness
+void encrypt(uint8_t encryption_key[K * 384 + 32], uint8_t m[32], uint8_t r[32], uint8_t ciphertext[32 * (du * K + dv)]);
 
 void compress(int16_t x, int d, uint16_t *compressed);
 
